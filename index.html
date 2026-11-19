@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Insights from a File</title>
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --card: #ffffff;
+    --ink: #1f2933;
+    --muted: #6b7680;
+    --line: #e4e9ee;
+    --green: #2e7d4f;
+    --green-bg: #e8f4ec;
+    --red: #b3423a;
+    --red-bg: #f9ecea;
+    --blue: #2b6cb0;
+    --blue-bg: #e9f1fa;
+    --amber: #92610a;
+    --amber-bg: #fdf3e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { text-align: center; padding: 8px 0 20px; }
+  header h1 { font-size: 1.6rem; font-weight: 600; }
+  header p { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+
+  section.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-top: 20px;
+  }
+  section.card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 4px; }
+  section.card > p.sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 14px; }
+
+  /* Upload */
+  #dropzone {
+    border: 2px dashed #b9c4cf;
+    border-radius: 12px;
+    padding: 34px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.drag { border-color: var(--blue); background: var(--blue-bg); }
+  #dropzone .big { font-size: 1.05rem; font-weight: 600; margin-top: 8px; }
+  #dropzone .hint { color: var(--muted); font-size: 0.88rem; margin-top: 4px; }
+  .pickbtn {
+    display: inline-block; margin-top: 14px;
+    background: var(--blue); color: #fff; border: none;
+    padding: 10px 22px; border-radius: 8px; font-size: 0.95rem; cursor: pointer;
+  }
+  .pickbtn:hover { background: #235a92; }
+  .tips {
+    margin-top: 14px; font-size: 0.85rem; color: var(--muted);
+    background: var(--amber-bg); border: 1px solid #f0dcae; border-radius: 8px; padding: 12px 14px;
+  }
+  .tips strong { color: var(--amber); }
+  #fileStatus { margin-top: 12px; font-size: 0.9rem; }
+  #fileStatus.ok { color: var(--green); }
+  #fileStatus.err { color: var(--red); }
+  table.samplePreview { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; }
+  table.samplePreview th, table.samplePreview td {
+    border: 1px solid var(--line); padding: 6px 8px; text-align: left;
+  }
+  table.samplePreview th { background: #f0f3f6; font-weight: 600; }
+
+  /* Summary */
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: flex-end; }
+  .controls label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+  .controls select {
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 0.95rem; background: #fff; color: var(--ink); min-width: 150px;
+  }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .kpi { border-radius: 10px; padding: 14px 16px; }
+  .kpi .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 1.35rem; font-weight: 600; margin-top: 2px; }
+  .kpi.total { background: var(--blue-bg); } .kpi.total .label, .kpi.total .value { color: var(--blue); }
+  .kpi.exp { background: var(--red-bg); } .kpi.exp .label, .kpi.exp .value { color: var(--red); }
+  .kpi.net { background: var(--green-bg); } .kpi.net .label, .kpi.net .value { color: var(--green); }
+  .kpi.net .value.negative { color: var(--red); }
+
+  .rankGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .rankGrid { grid-template-columns: 1fr; } }
+  .rankBox { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .rankBox h3 { font-size: 0.95rem; margin-bottom: 10px; }
+  .rankBox.best h3 { color: var(--green); }
+  .rankBox.worst h3 { color: var(--red); }
+  .rankBox ol { list-style: none; }
+  .rankBox li { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
+  .rankBox li:first-child { border-top: none; }
+  .rankBox li .amt { font-weight: 600; }
+  .emptyMsg { color: var(--muted); font-size: 0.9rem; font-style: italic; }
+
+  /* Insight */
+  #insightBox {
+    background: var(--blue-bg); border: 1px solid #c5d8ec; border-radius: 10px;
+    padding: 16px 18px; font-size: 0.95rem;
+  }
+  #insightBox ul { margin: 10px 0 0 20px; }
+  #insightBox li { margin-top: 6px; }
+
+  /* Expenses */
+  .expRow { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .expRow .name { width: 160px; font-size: 0.92rem; flex-shrink: 0; }
+  .expRow .bar-track { flex: 1; height: 16px; background: #eef1f4; border-radius: 8px; overflow: hidden; }
+  .expRow .bar-fill { height: 100%; background: var(--amber); border-radius: 8px; }
+  .expRow .val { width: 110px; text-align: right; font-size: 0.9rem; font-weight: 600; flex-shrink: 0; }
+  .expTotal { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-weight: 600; display: flex; justify-content: space-between; }
+  .note { margin-top: 14px; font-size: 0.8rem; color: var(--muted); }
+  footer { text-align: center; margin-top: 30px; color: var(--muted); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Sales Insights from a File</h1>
+    <p>Upload a sales file and see your best products, weak products, monthly &amp; yearly results, net sales and expenses — all on one page.</p>
+  </header>
+
+  <!-- SECTION 1: Upload -->
+  <section class="card" id="section-upload">
+    <h2>1. Upload your sales file</h2>
+    <p class="sub">Choose a CSV file from your phone or computer. Everything is read right here on screen — nothing is uploaded or saved.</p>
+    <div id="dropzone" tabindex="0" role="button" aria-label="Choose a sales file">
+      <div style="font-size:2rem;">📄</div>
+      <div class="big">Pick a sales file to get started</div>
+      <div class="hint">Drag &amp; drop a file here, or click the button below</div>
+      <button class="pickbtn" id="pickBtn" type="button">Choose file</button>
+      <input type="file" id="fileInput" accept=".csv,.txt" hidden>
+    </div>
+    <div id="fileStatus"></div>
+    <div class="tips">
+      <strong>File tips:</strong> Use a .csv or .txt file with a header row. Expected columns:
+      <code>Date, Product, Quantity, UnitPrice, ExpenseType, ExpenseAmount</code>.
+      Sales rows need a Product, Quantity and UnitPrice. Expense rows leave Product blank and fill in ExpenseType and ExpenseAmount.
+      Dates like <code>2025-03-14</code> or <code>14/03/2025</code> both work.
+    </div>
+    <table class="samplePreview" aria-label="Example rows currently shown">
+      <thead><tr><th>Date</th><th>Product</th><th>Quantity</th><th>Unit Price (RM)</th></tr></thead>
+      <tbody id="sampleRowsBody"></tbody>
+    </table>
+    <p class="note">The table above shows example rows currently loaded so the page is never empty.</p>
+  </section>
+
+  <!-- SECTION 2: Sales and cash flow summary -->
+  <section class="card" id="section-summary">
+    <h2>2. Sales &amp; cash flow summary</h2>
+    <p class="sub">Pick a month or the whole year to see your best and worst products, total sales, expenses and net sales.</p>
+    <div class="controls">
+      <div>
+        <label for="yearSel">Year</label>
+        <select id="yearSel"></select>
+      </div>
+      <div>
+        <label for="monthSel">Period</label>
+        <select id="monthSel">
+          <option value="all">Whole year</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi total"><div class="label">Total Sales</div><div class="value" id="kpiSales">—</div></div>
+      <div class="kpi exp"><div class="label">Total Expenses</div><div class="value" id="kpiExp">—</div></div>
+      <div class="kpi net"><div class="label">Net Sales</div><div class="value" id="kpiNet">—</div></div>
+    </div>
+    <div class="rankGrid">
+      <div class="rankBox best">
+        <h3>🏆 Best sellers (top 5)</h3>
+        <ol id="bestList"></ol>
+      </div>
+      <div class="rankBox worst">
+        <h3>⚠️ Weakest sellers (bottom 5)</h3>
+        <ol id="worstList"></ol>
+      </div>
+    </div>
+    <div style="margin-top:18px;">
+      <h3 style="font-size:0.95rem; margin-bottom:6px;">AI-style insight</h3>
+      <div id="insightBox"><ul id="insightList"></ul></div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: Expense breakdown -->
+  <section class="card" id="section-expenses">
+    <h2>3. Expense breakdown</h2>
+    <p class="sub">What was taken out of your sales for the selected period.</p>
+    <div id="expBreakdown"></div>
+    <div class="expTotal"><span>Total expenses (selected period)</span><span id="expTotalVal">—</span></div>
+    <p class="note">Sample figures are generated for demonstration only — they are not real business numbers.</p>
+  </section>
+
+  <footer>Sales Insights from a File — a simple demo tool. Your file never leaves this page.</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Sample data (Malaysian small business: kopitiam) ---------- */
+const SAMPLE_SALES = [
+  { date: "2025-11-03", product: "Nasi Lemak Ayam", qty: 120, unit: 8.50 },
+  { date: "2025-11-07", product: "Teh Tarik", qty: 250, unit: 3.20 },
+  { date: "2025-11-12", product: "Roti Canai", qty: 180, unit: 2.50 },
+  { date: "2025-10-05", product: "Nasi Lemak Ayam", qty: 110, unit: 8.50 },
+  { date: "2025-10-11", product: "Mee Goreng", qty: 60, unit: 7.00 },
+  { date: "2025-10-18", product: "Teh Tarik", qty: 210, unit: 3.20 },
+  { date: "2025-09-09", product: "Nasi Goreng Kampung", qty: 45, unit: 7.50 },
+  { date: "2025-09-15", product: "Teh Tarik", qty: 190, unit: 3.20 },
+  { date: "2025-09-22", product: "Kuih Lapis", qty: 30, unit: 1.80 }
+];
+const SAMPLE_EXPENSES = [
+  { date: "2025-11-10", type: "Ingredients", amount: 950 },
+  { date: "2025-11-25", type: "Staff wages", amount: 1250 },
+  { date: "2025-10-08", type: "Ingredients", amount: 880 },
+  { date: "2025-10-20", type: "Rent", amount: 950 },
+  { date: "2025-09-12", type: "Ingredients", amount: 760 },
+  { date: "2025-09-28", type: "Utilities", amount: 340 }
+];
+
+/* ---------- State ---------- */
+let sales = [];      // {date: Date, product, qty, unit, total}
+let expenses = [];   // {date: Date, type, amount}
+let sourceName = "Sample data (built-in)";
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ---------- Helpers ---------- */
+const rm = n => "RM " + n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function parseDate(s) {
+  s = s.trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]); // DD/MM/YYYY
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+  if (m) return new Date(2000 + +m[3], +m[2] - 1, +m[1]);
+  return null;
+}
+
+function splitCSVLine(line) {
+  const out = []; let cur = "", inQ = false;
+  for (const ch of line) {
+    if (ch === '"') inQ = !inQ;
+    else if (ch === "," && !inQ) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+/* ---------- Rendering ---------- */
+function renderSampleTable() {
+  const body = document.getElementById("sampleRowsBody");
+  body.innerHTML = SAMPLE_SALES.slice(0, 3).map(r =>
+    `<tr><td>${r.date}</td><td>${r.product}</td><td>${r.qty}</td><td>${r.unit.toFixed(2)}</td></tr>`
+  ).join("");
+}
+
+function setData(s, e, name) {
+  sales = s; expenses = e; sourceName = name;
+  buildPeriodSelectors();
+  renderAll();
+}
+
+function buildPeriodSelectors() {
+  const yearSel = document.getElementById("yearSel");
+  const monthSel = document.getElementById("monthSel");
+  const years = [...new Set([...sales, ...expenses].map(r => r.date.getFullYear()))].sort((a, b) => b - a);
+  const monthsWithData = [...new Set([...sales, ...expenses].map(r => r.date.getMonth()))].sort((a, b) => a - b);
+  yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+  monthSel.innerHTML = `<option value="all">Whole year</option>` +
+    monthsWithData.map(m => `<option value="${m}">${MONTHS[m]}</option>`).join("");
+}
+
+function currentPeriod() {
+  const y = +document.getElementById("yearSel").value;
+  const m = document.getElementById("monthSel").value;
+  return { year: y, month: m === "all" ? null : +m };
+}
+
+function filtered(period) {
+  const s = sales.filter(r => r.date.getFullYear() === period.year && (period.month === null || r.date.getMonth() === period.month));
+  const e = expenses.filter(r => r.date.getFullYear() === period.year && (period.month === null || r.date.getMonth() === period.month));
+  return { s, e };
+}
+
+function productTotals(rows) {
+  const map = new Map();
+  for (const r of rows) map.set(r.product, (map.get(r.product) || 0) + r.total);
+  return [...map.entries()].map(([product, total]) => ({ product, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+function renderAll() {
+  const period = currentPeriod();
+  const { s, e } = filtered(period);
+  const totalSales = s.reduce((a, r) => a + r.total, 0);
+  const totalExp = e.reduce((a, r) => a + r.amount, 0);
+  const net = totalSales - totalExp;
+
+  const label = period.month === null ? `${period.year} (whole year)` : `${MONTHS[period.month]} ${period.year}`;
+  document.getElementById("kpiSales").textContent = rm(totalSales);
+  document.getElementById("kpiExp").textContent = rm(totalExp);
+  const netEl = document.getElementById("kpiNet");
+  netEl.textContent = rm(net);
+  netEl.classList.toggle("negative", net < 0);
+
+  const ranked = productTotals(s);
+  const best = ranked.slice(0, 5);
+  const worst = ranked.slice(-5).reverse();
+
+  const fill = (el, items, rankFromBottom) => {
+    el.innerHTML = items.length
+      ? items.map((it, i) => `<li><span>${rankFromBottom ? "#" + (items.length - i) + " " : "#" + (i + 1) + " "}${it.product}</span><span class="amt">${rm(it.total)}</span></li>`).join("")
+      : `<li class="emptyMsg">No sales in this period.</li>`;
+  };
+  fill(document.getElementById("bestList"), best, false);
+  fill(document.getElementById("worstList"), worst, false);
+
+  renderInsight(period, label, totalSales, totalExp, net, best, worst);
+  renderExpenses(e);
+}
+
+function renderInsight(period, label, totalSales, totalExp, net, best, worst) {
+  const list = document.getElementById("insightList");
+  const items = [];
+  items.push(`For <strong>${label}</strong>, total sales were <strong>${rm(totalSales)}</strong> and expenses were <strong>${rm(totalExp)}</strong>, leaving net sales of <strong>${rm(net)}</strong>.`);
+  if (best.length) {
+    const share = totalSales > 0 ? Math.round(best[0].total / totalSales * 100) : 0;
+    items.push(`<strong>${best[0].product}</strong> is your most sellable product, bringing in ${rm(best[0].total)} — about ${share}% of sales this period. Keep it well stocked.`);
+  } else {
+    items.push("No sales recorded for this period, so there is no best seller to highlight yet.");
+  }
+  if (worst.length > 1) {
+    items.push(`<strong>${worst[0].product}</strong> is the weakest seller at ${rm(worst[0].total)}. Consider a promotion, a price tweak, or replacing it with something more popular.`);
+  } else if (worst.length === 1) {
+    items.push(`Only one product sold this period (${worst[0].product}), so there is no weak-product comparison yet.`);
+  }
+  if (totalSales > 0) {
+    const pct = Math.round(totalExp / totalSales * 100);
+    items.push(`Expenses take about <strong>${pct}%</strong> of your sales. ${pct > 60 ? "That is quite high — worth reviewing your biggest expense types below." : "That leaves a reasonable amount as net sales."}`);
+  } else {
+    items.push("No sales in this period, so the expense ratio cannot be calculated.");
+  }
+  list.innerHTML = items.map(t => `<li>${t}</li>`).join("");
+}
+
+function renderExpenses(expRows) {
+  const box = document.getElementById("expBreakdown");
+  const total = expRows.reduce((a, r) => a + r.amount, 0);
+  const byType = new Map();
+  for (const r of expRows) byType.set(r.type, (byType.get(r.type) || 0) + r.amount);
+  const rows = [...byType.entries()].sort((a, b) => b[1] - a[1]);
+  box.innerHTML = rows.length
+    ? rows.map(([type, amt]) => {
+        const pct = total > 0 ? (amt / total * 100) : 0;
+        return `<div class="expRow">
+          <span class="name">${type}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
+          <span class="val">${rm(amt)} (${pct.toFixed(0)}%)</span>
+        </div>`;
+      }).join("")
+    : `<p class="emptyMsg">No expenses recorded for this period.</p>`;
+  document.getElementById("expTotalVal").textContent = rm(total);
+}
+
+/* ---------- File reading ---------- */
+function readFile(file) {
+  const status = document.getElementById("fileStatus");
+  if (!/\.(csv|txt)$/i.test(file.name)) {
+    status.className = "err";
+    status.textContent = "Sorry — please choose a .csv or .txt file.";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const lines = String(reader.result).split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) throw new Error("The file looks empty — it needs a header row and at least one data row.");
+      const header = splitCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
+      const idx = name => header.findIndex(h => h.includes(name));
+      const iDate = idx("date"), iProd = idx("product"), iQty = idx("quantity") >= 0 ? idx("quantity") : idx("qty");
+      const iUnit = idx("unit"), iExpT = idx("expensetype") >= 0 ? idx("expensetype") : idx("category"), iExpA = idx("expenseamount") >= 0 ? idx("expenseamount") : idx("amount");
+      if (iDate < 0) throw new Error('Could not find a "Date" column in the header row.');
+
+      const s = [], e = [];
+      let skipped = 0;
+      for (const line of lines.slice(1)) {
+        const c = splitCSVLine(line);
+        const d = parseDate(c[iDate] || "");
+        if (!d) { skipped++; continue; }
+        const prod = (c[iProd] || "").trim();
+        const qty = parseFloat(c[iQty]);
+        const unit = parseFloat(c[iUnit]);
+        if (prod && !isNaN(qty) && !isNaN(unit)) {
+          s.push({ date: d, product: prod, qty, unit, total: qty * unit });
+        } else if (!prod && iExpT >= 0 && iExpA >= 0 && c[iExpT] && !isNaN(parseFloat(c[iExpA]))) {
+          e.push({ date: d, type: c[iExpT].trim(), amount: parseFloat(c[iExpA]) });
+        } else skipped++;
+      }
+      if (!s.length && !e.length) throw new Error("No valid sales or expense rows were found. Please check the column names and formats.");
+      setData(s, e, file.name);
+      status.className = "ok";
+      status.textContent = `✔ Loaded "${file.name}" — ${s.length} sales row(s), ${e.length} expense row(s)` + (skipped ? `, ${skipped} row(s) skipped` : "") + ". Results updated below.";
+    } catch (err) {
+      status.className = "err";
+      status.textContent = "Could not read the file: " + err.message;
+    }
+  };
+  reader.onerror = () => {
+    status.className = "err";
+    status.textContent = "Sorry — the file could not be read.";
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- Wire up ---------- */
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+
+document.getElementById("pickBtn").addEventListener("click", ev => { ev.stopPropagation(); fileInput.click(); });
+dropzone.addEventListener("click", () => fileInput.click());
+dropzone.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") fileInput.click(); });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) readFile(fileInput.files[0]); });
+["dragover", "dragenter"].forEach(evName => dropzone.addEventListener(evName, ev => { ev.preventDefault(); dropzone.classList.add("drag"); }));
+["dragleave", "drop"].forEach(evName => dropzone.addEventListener(evName, ev => { ev.preventDefault(); dropzone.classList.remove("drag"); }));
+dropzone.addEventListener("drop", ev => { const f = ev.dataTransfer.files[0]; if (f) readFile(f); });
+
+document.getElementById("yearSel").addEventListener("change", renderAll);
+document.getElementById("monthSel").addEventListener("change", renderAll);
+
+/* ---------- Start with sample data (page never opens empty) ---------- */
+renderSampleTable();
+setData(
+  SAMPLE_SALES.map(r => ({ ...r, date: parseDate(r.date), total: r.qty * r.unit })),
+  SAMPLE_EXPENSES.map(r => ({ ...r, date: parseDate(r.date) })),
+  "Sample data (built-in)"
+);
+document.getElementById("fileStatus").className = "";
+document.getElementById("fileStatus").textContent = "Showing built-in sample data for a Malaysian kopitiam. Upload your own file to replace it.";
+</script>
+</body>
+</html>
